@@ -116,4 +116,4 @@ Do **NOT** use this tool on systems you do not own or have permission to test.
 ---
 
 ## 📜 License
-MIT License © 2025 - haudy-al
+MIT License © 2025 - Haudy
