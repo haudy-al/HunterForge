@@ -1,0 +1,11 @@
+www
+mail
+webmail
+admin
+vpn
+api
+dev
+simrs
+esir
+portal
+sso

@@ -1,0 +1,6 @@
+click
+rich
+requests
+aiohttp
+tldextract
+aiodns
