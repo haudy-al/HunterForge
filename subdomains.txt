@@ -6,6 +6,5 @@ vpn
 api
 dev
 simrs
-esir
 portal
 sso
