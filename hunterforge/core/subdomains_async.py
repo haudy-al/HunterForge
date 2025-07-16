@@ -2,6 +2,7 @@ import aiohttp
 import asyncio
 import tldextract
 import aiodns
+import socket
 from rich.console import Console
 from rich.progress import Progress
 
@@ -82,10 +83,21 @@ async def gather_subdomains(domain):
 
     return all_subdomains
 
-async def brute_force_subdomains(domain, wordlist):
-    resolver = aiodns.DNSResolver()
-    subdomains = set()
+async def get_asn_info(session, ip):
+    """Get ASN info using ipinfo.io (no token)"""
+    url = f"https://ipinfo.io/{ip}/org"
+    try:
+        async with session.get(url, timeout=10) as resp:
+            if resp.status == 200:
+                text = await resp.text()
+                return text.strip()
+    except:
+        pass
+    return "Unknown ASN"
 
+async def brute_force_subdomains(domain, wordlist, concurrency):
+    resolver = aiodns.DNSResolver()
+    subdomains = {}
     try:
         with open(wordlist, "r") as f:
             words = [line.strip() for line in f if line.strip()]
@@ -93,24 +105,27 @@ async def brute_force_subdomains(domain, wordlist):
         console.print(f"[red][-] Wordlist not found: {wordlist}[/red]")
         return subdomains
 
+    sem = asyncio.Semaphore(concurrency)
+
     async def resolve(sub):
-        try:
-            await resolver.gethostbyname(sub, socket.AF_INET)
-            return sub
-        except:
-            return None
+        async with sem:
+            try:
+                result = await resolver.gethostbyname(sub, socket.AF_INET)
+                return sub, result.addresses[0]
+            except:
+                return None
 
-    tasks = []
-    for word in words:
-        sub = f"{word}.{domain}"
-        tasks.append(resolve(sub))
+    tasks = [resolve(f"{word}.{domain}") for word in words]
 
-    with Progress() as progress:
-        task = progress.add_task("[yellow]Brute forcing subdomains...", total=len(tasks))
-        for coro in asyncio.as_completed(tasks):
-            result = await coro
-            if result:
-                subdomains.add(result)
-            progress.update(task, advance=1)
+    async with aiohttp.ClientSession() as session:
+        with Progress() as progress:
+            task = progress.add_task("[yellow]Brute forcing subdomains...", total=len(tasks))
+            for coro in asyncio.as_completed(tasks):
+                result = await coro
+                if result:
+                    sub, ip = result
+                    asn = await get_asn_info(session, ip)
+                    subdomains[sub] = (ip, asn)
+                progress.update(task, advance=1)
 
     return subdomains
